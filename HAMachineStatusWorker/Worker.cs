@@ -6,9 +6,9 @@ namespace HAMachineStatusWorker;
 
 public class Worker : BackgroundService
 {
-    private static string MQTTUsername = "usernamedev";
-    private static string MQTTPassword = "passworddev";
-    private static string MQTTServerIP = "192.168.31.127";
+    private static string MQTTUsername = "mqtt-remotesys";
+    private static string MQTTPassword = "mqtt";
+    private static string MQTTServerIP = "192.168.1.132";
     private static int MQTTServerPort = 1883;
 
     private readonly ILogger<Worker> _logger;
@@ -31,12 +31,12 @@ public class Worker : BackgroundService
             var status = new
             {
                 OsVersion = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
-                Uptime = GetUptime()
+                BootTime = GetBootTime()
             };
 
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
             _logger.LogInformation("OS Version: {time}", status.OsVersion);
-            _logger.LogInformation("Uptime: {time}", status.Uptime);
+            _logger.LogInformation("BootTime: {time}", status.BootTime);
 
             var applicationMessage = new MqttApplicationMessageBuilder()
                 .WithTopic("machinestatus/os_version")
@@ -46,8 +46,8 @@ public class Worker : BackgroundService
             await this._mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
 
             applicationMessage = new MqttApplicationMessageBuilder()
-                .WithTopic("machinestatus/uptime")
-                .WithPayload(status.Uptime.ToString())
+                .WithTopic("machinestatus/boot_time")
+                .WithPayload(status.BootTime)
                 .Build();
 
             await this._mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
@@ -57,12 +57,21 @@ public class Worker : BackgroundService
 
         _mqttClient.Dispose();
     }
-
-    private double GetUptime()
+    
+    private static string GetMachineName()
     {
-        // nao esta bem ainda
-        var duration = TimeSpan.FromTicks(System.Environment.TickCount);
-        return duration.TotalMinutes;
+        return System.Environment.MachineName;
+    }
+
+    private string GetBootTime()
+    {
+        var timespan = TimeSpan.FromMilliseconds(Environment.TickCount);
+
+        var bootTime = DateTime.UtcNow - timespan;
+        
+        var bootTimeFormats = bootTime.GetDateTimeFormats('O');
+        
+        return bootTimeFormats.FirstOrDefault()!;
     }
 
     private async Task ConnectClientAsync()
@@ -99,8 +108,8 @@ public class Worker : BackgroundService
         await this._mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
 
         applicationMessage = new MqttApplicationMessageBuilder()
-                .WithTopic("homeassistant/sensor/MachineStatus/Uptime/config")
-                .WithPayload(GetUptimeSensor())
+                .WithTopic("homeassistant/sensor/MachineStatus/BootTime/config")
+                .WithPayload(GetBootTimeSensor())
                 .Build();
 
         await this._mqttClient.PublishAsync(applicationMessage, CancellationToken.None);
@@ -114,12 +123,12 @@ public class Worker : BackgroundService
             state_topic = "machinestatus/os_version",
             icon = "mdi:desktop-classic",
             retain = true,
-            unique_id = "66de0f5a-f0f3-4f39-9de6-a122ed0421de",
+            unique_id = "7b46561b-bc5e-44c8-abdd-eeebcefcf8f9",
             device = new
             {
                 manufacturer = "MPC, PMF & MM Lda",
-                identifiers = new string[] { "ade0b147-b072-4ed0-ad04-8425eade79d8" },
-                model = "Machine Status",
+                identifiers = new string[] { "04c5d0de-0d89-44d2-b608-7cfe2e111790" },
+                model = $"Machine Status ({GetMachineName()})",
                 name = "Machine Status",
                 sw_version = "1.0.0.0"
             }
@@ -128,20 +137,21 @@ public class Worker : BackgroundService
         return JsonSerializer.Serialize(sensor);
     }
 
-    private static string GetUptimeSensor()
+    private static string GetBootTimeSensor()
     {
         var sensor = new
         {
-            name = "Uptime",
-            state_topic = "machinestatus/uptime",
+            name = "Boot Time",
+            state_topic = "machinestatus/boot_time",
             icon = "mdi:timer-outline",
             retain = true,
-            unique_id = "f9e40c5a-41c3-451a-92c7-e8a49aad701e",
+            unique_id = "9b6be5ec-b5fd-4fc8-883f-14521d7c34db",
+            device_class = "timestamp",
             device = new
             {
                 manufacturer = "MPC, PMF & MM Lda",
-                identifiers = new string[] { "ade0b147-b072-4ed0-ad04-8425eade79d8" },
-                model = "Machine Status",
+                identifiers = new string[] { "04c5d0de-0d89-44d2-b608-7cfe2e111790" },
+                model = $"Machine Status ({GetMachineName()})",
                 name = "Machine Status",
                 sw_version = "1.0.0.0"
             }
