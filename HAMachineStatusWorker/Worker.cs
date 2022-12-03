@@ -1,14 +1,18 @@
-using System.Text.Json;
 using MQTTnet;
 using MQTTnet.Client;
+using System.Runtime.InteropServices;
+using System.Text.Json;
 
 namespace HAMachineStatusWorker;
 
 public class Worker : BackgroundService
 {
     private static string MQTTUsername = "mqtt-remotesys";
+
     private static string MQTTPassword = "mqtt";
+
     private static string MQTTServerIP = "192.168.1.132";
+
     private static int MQTTServerPort = 1883;
 
     private readonly ILogger<Worker> _logger;
@@ -30,7 +34,7 @@ public class Worker : BackgroundService
         {
             var status = new
             {
-                OsVersion = System.Runtime.InteropServices.RuntimeInformation.RuntimeIdentifier,
+                OsVersion = GetOSVersion(),
                 BootTime = GetBootTime()
             };
 
@@ -57,7 +61,12 @@ public class Worker : BackgroundService
 
         _mqttClient.Dispose();
     }
-    
+
+    private static string GetOSVersion()
+    {
+        return RuntimeInformation.RuntimeIdentifier;
+    }
+
     private static string GetMachineName()
     {
         return System.Environment.MachineName;
@@ -68,9 +77,9 @@ public class Worker : BackgroundService
         var timespan = TimeSpan.FromMilliseconds(Environment.TickCount);
 
         var bootTime = DateTime.UtcNow - timespan;
-        
+
         var bootTimeFormats = bootTime.GetDateTimeFormats('O');
-        
+
         return bootTimeFormats.FirstOrDefault()!;
     }
 
@@ -123,11 +132,15 @@ public class Worker : BackgroundService
             state_topic = "machinestatus/os_version",
             icon = "mdi:desktop-classic",
             retain = true,
-            unique_id = "7b46561b-bc5e-44c8-abdd-eeebcefcf8f9",
+            unique_id = $"{GetMachineName()}-{GetOSVersion()}-OSVersion",
             device = new
             {
                 manufacturer = "MPC, PMF & MM Lda",
-                identifiers = new string[] { "04c5d0de-0d89-44d2-b608-7cfe2e111790" },
+                identifiers = new string[]
+                {
+                    GetMachineName(),
+                    GetOSVersion()
+                },
                 model = $"Machine Status ({GetMachineName()})",
                 name = "Machine Status",
                 sw_version = "1.0.0.0"
@@ -145,12 +158,16 @@ public class Worker : BackgroundService
             state_topic = "machinestatus/boot_time",
             icon = "mdi:timer-outline",
             retain = true,
-            unique_id = "9b6be5ec-b5fd-4fc8-883f-14521d7c34db",
+            unique_id = $"{GetMachineName()}-{GetOSVersion()}-BootTime",
             device_class = "timestamp",
             device = new
             {
                 manufacturer = "MPC, PMF & MM Lda",
-                identifiers = new string[] { "04c5d0de-0d89-44d2-b608-7cfe2e111790" },
+                identifiers = new string[]
+                {
+                    GetMachineName(),
+                    GetOSVersion()
+                },
                 model = $"Machine Status ({GetMachineName()})",
                 name = "Machine Status",
                 sw_version = "1.0.0.0"
