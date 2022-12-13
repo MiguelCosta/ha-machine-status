@@ -1,8 +1,12 @@
 using HAMachineStatusWorker;
+using HAMachineStatusWorker.Configuration;
 
-IHost host = Host.CreateDefaultBuilder(args)
-    .ConfigureServices(services =>
+var host = Host.CreateDefaultBuilder(args)
+    .ConfigureServices((hostContext, services) =>
     {
+        var settings = hostContext.Configuration.GetSection("Settings").Get<Settings>();
+
+        services.AddSingleton(settings);
         services.AddHostedService<Worker>();
     })
     .Build();
