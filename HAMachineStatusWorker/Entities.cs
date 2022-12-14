@@ -55,7 +55,7 @@ public static class Entities
 
         var result = coreTempSum / match.Count;
 
-        return result.ToString(CultureInfo.InvariantCulture);
+        return result.ToString("0.#", CultureInfo.InvariantCulture);
     }
 
     private static string ExecuteShell(string command)
