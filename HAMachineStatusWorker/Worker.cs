@@ -14,17 +14,15 @@ public class Worker : BackgroundService
 
     private readonly Settings _settings;
 
+    private EntityStates _states;
+
     public Worker(ILogger<Worker> logger, Settings settings)
     {
         _logger = logger;
-        _settings = settings;
-    }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        // Entities that don't require constant
-        // updates can be set outside the loop
-        var states = new EntityStates
+        _settings = settings;
+
+        _states = new EntityStates
         {
             MachineName = Entities.GetMachineName(),
             OsVersion = Entities.GetOsVersion(),
@@ -32,45 +30,48 @@ public class Worker : BackgroundService
             CpuTemperature = "0",
             IpAddress = "0"
         };
+    }
 
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
         await ConnectClientAsync();
 
-        await CreateSensors(states);
+        await CreateSensors();
 
         while (!stoppingToken.IsCancellationRequested)
         {
             // Update required entities here
-            states.CpuTemperature = Entities.GetCpuTemperature(_settings.LmSensorsAdapterName);
-            states.IpAddress = Entities.GetIpAddress(_settings.NetworkInterfaceName);
+            _states.CpuTemperature = Entities.GetCpuTemperature(_settings.LmSensorsAdapterName);
+            _states.IpAddress = Entities.GetIpAddress(_settings.NetworkInterfaceName);
 
             _logger.LogInformation("Worker running at: {time}", DateTimeOffset.Now);
 
             var statesMessages = new List<MqttApplicationMessage>
             {
                 new MqttApplicationMessageBuilder()
-                    .WithTopic($"machinestatus/{states.MachineName}/os_version")
-                    .WithPayload(states.OsVersion)
+                    .WithTopic($"machinestatus/{_states.MachineName}/os_version")
+                    .WithPayload(_states.OsVersion)
                     .Build(),
 
                 new MqttApplicationMessageBuilder()
-                    .WithTopic($"machinestatus/{states.MachineName}/boot_time")
-                    .WithPayload(states.BootTime)
+                    .WithTopic($"machinestatus/{_states.MachineName}/boot_time")
+                    .WithPayload(_states.BootTime)
                     .Build(),
 
                 new MqttApplicationMessageBuilder()
-                    .WithTopic($"machinestatus/{states.MachineName}/cpu_temperature")
-                    .WithPayload(states.CpuTemperature)
+                    .WithTopic($"machinestatus/{_states.MachineName}/cpu_temperature")
+                    .WithPayload(_states.CpuTemperature)
                     .Build(),
 
                 new MqttApplicationMessageBuilder()
-                    .WithTopic($"machinestatus/{states.MachineName}/ip_address")
-                    .WithPayload(states.IpAddress)
+                    .WithTopic($"machinestatus/{_states.MachineName}/ip_address")
+                    .WithPayload(_states.IpAddress)
                     .Build()
             };
 
             await PublishToMqttAsync(statesMessages);
 
-            await Task.Delay(_settings.PublishInterval, stoppingToken);
+            await Task.Delay(_settings.PublishInterval * 1000, stoppingToken);
         }
 
         _mqttClient.Dispose();
@@ -81,6 +82,7 @@ public class Worker : BackgroundService
         var mqttFactory = new MqttFactory();
 
         _mqttClient = mqttFactory.CreateMqttClient();
+        
         var mqttClientOptions = new MqttClientOptionsBuilder()
             .WithTcpServer(_settings.MqttSettings.MQTTServerIP, _settings.MqttSettings.MQTTServerPort)
             .WithCredentials(_settings.MqttSettings.MQTTUsername, _settings.MqttSettings.MQTTPassword)
@@ -98,28 +100,28 @@ public class Worker : BackgroundService
         }
     }
 
-    private async Task CreateSensors(EntityStates states)
+    private async Task CreateSensors()
     {
         var sensorsMessages = new List<MqttApplicationMessage>
         {
             new MqttApplicationMessageBuilder()
-                .WithTopic($"homeassistant/sensor/MachineStatus{states.MachineName}/OSVersion/config")
-                .WithPayload(VersionSensor(states))
+                .WithTopic($"homeassistant/sensor/MachineStatus{_states.MachineName}/OSVersion/config")
+                .WithPayload(VersionSensor())
                 .Build(),
 
             new MqttApplicationMessageBuilder()
-                .WithTopic($"homeassistant/sensor/MachineStatus{states.MachineName}/BootTime/config")
-                .WithPayload(BootTimeSensor(states))
+                .WithTopic($"homeassistant/sensor/MachineStatus{_states.MachineName}/BootTime/config")
+                .WithPayload(BootTimeSensor())
                 .Build(),
 
             new MqttApplicationMessageBuilder()
-                .WithTopic($"homeassistant/sensor/MachineStatus{states.MachineName}/CpuTemperature/config")
-                .WithPayload(CpuTemperatureSensor(states))
+                .WithTopic($"homeassistant/sensor/MachineStatus{_states.MachineName}/CpuTemperature/config")
+                .WithPayload(CpuTemperatureSensor())
                 .Build(),
 
             new MqttApplicationMessageBuilder()
-                .WithTopic($"homeassistant/sensor/MachineStatus{states.MachineName}/IpAddress/config")
-                .WithPayload(IpAddressSensor(states))
+                .WithTopic($"homeassistant/sensor/MachineStatus{_states.MachineName}/IpAddress/config")
+                .WithPayload(IpAddressSensor())
                 .Build()
         };
 
@@ -134,85 +136,85 @@ public class Worker : BackgroundService
         await Task.WhenAll(messagesTasks);
     }
 
-    private static string VersionSensor(EntityStates states)
+    private string VersionSensor()
     {
         var sensor = new
         {
             name = "OS Version",
-            state_topic = $"machinestatus/{states.MachineName}/os_version",
+            state_topic = $"machinestatus/{_states.MachineName}/os_version",
             icon = "mdi:desktop-classic",
             retain = true,
-            unique_id = $"{states.MachineName}-{nameof(VersionSensor)}",
-            object_id = $"{states.MachineName}-{nameof(VersionSensor)}",
-            expire_after = 120,
-            device = CommonDevice(states)
+            unique_id = $"{_states.MachineName}-{nameof(VersionSensor)}",
+            object_id = $"{_states.MachineName}-{nameof(VersionSensor)}",
+            expire_after = _settings.SensorExpireAfter,
+            device = CommonDevice()
         };
 
         return JsonSerializer.Serialize(sensor);
     }
 
-    private static string BootTimeSensor(EntityStates states)
+    private string BootTimeSensor()
     {
         var sensor = new
         {
             name = "Boot Time",
-            state_topic = $"machinestatus/{states.MachineName}/boot_time",
+            state_topic = $"machinestatus/{_states.MachineName}/boot_time",
             icon = "mdi:timer-outline",
             retain = true,
-            unique_id = $"{states.MachineName}-{nameof(BootTimeSensor)}",
-            object_id = $"{states.MachineName}-{nameof(BootTimeSensor)}",
+            unique_id = $"{_states.MachineName}-{nameof(BootTimeSensor)}",
+            object_id = $"{_states.MachineName}-{nameof(BootTimeSensor)}",
             device_class = "timestamp",
-            expire_after = 120,
-            device = CommonDevice(states)
+            expire_after = _settings.SensorExpireAfter,
+            device = CommonDevice()
         };
 
         return JsonSerializer.Serialize(sensor);
     }
 
-    private static string CpuTemperatureSensor(EntityStates states)
+    private string CpuTemperatureSensor()
     {
         var sensor = new
         {
             name = "CPU Temperature",
-            state_topic = $"machinestatus/{states.MachineName}/cpu_temperature",
+            state_topic = $"machinestatus/{_states.MachineName}/cpu_temperature",
             icon = "mdi:thermometer",
             retain = true,
-            unique_id = $"{states.MachineName}-{nameof(CpuTemperatureSensor)}",
-            object_id = $"{states.MachineName}-{nameof(CpuTemperatureSensor)}",
+            unique_id = $"{_states.MachineName}-{nameof(CpuTemperatureSensor)}",
+            object_id = $"{_states.MachineName}-{nameof(CpuTemperatureSensor)}",
             device_class = "temperature",
-            expire_after = 120,
+            expire_after = _settings.SensorExpireAfter,
             unit_of_measurement = "ºC",
-            device = CommonDevice(states)
+            device = CommonDevice()
         };
 
         return JsonSerializer.Serialize(sensor);
     }
 
-    private static string IpAddressSensor(EntityStates states)
+    private string IpAddressSensor()
     {
         var sensor = new
         {
             name = "IP Address",
-            state_topic = $"machinestatus/{states.MachineName}/ip_address",
+            state_topic = $"machinestatus/{_states.MachineName}/ip_address",
             icon = "mdi:ip-network",
             retain = true,
-            unique_id = $"{states.MachineName}-{nameof(IpAddressSensor)}",
-            object_id = $"{states.MachineName}-{nameof(IpAddressSensor)}",
-            expire_after = 120,
-            device = CommonDevice(states)
+            unique_id = $"{_states.MachineName}-{nameof(IpAddressSensor)}",
+            object_id = $"{_states.MachineName}-{nameof(IpAddressSensor)}",
+            expire_after = _settings.SensorExpireAfter,
+            device = CommonDevice()
         };
 
         return JsonSerializer.Serialize(sensor);
     }
 
-    private static object CommonDevice(EntityStates states)
+    private object CommonDevice()
     {
         return new
         {
             manufacturer = "MPC, PMF & MM Lda",
-            identifiers = new string[] {states.MachineIdentifier},
-            model = $"Machine Status ({states.MachineName})",
-            name = states.MachineName,
+            identifiers = new string[] {_states.MachineIdentifier},
+            model = $"Machine Status ({_states.MachineName})",
+            name = _states.MachineName,
             sw_version = "1.0.0.1"
         };
     }
