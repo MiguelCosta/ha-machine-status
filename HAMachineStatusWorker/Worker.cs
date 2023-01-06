@@ -14,7 +14,7 @@ public class Worker : BackgroundService
 
     private readonly Settings _settings;
 
-    private EntityStates _states;
+    private readonly EntityStates _states;
 
     public Worker(ILogger<Worker> logger, Settings settings)
     {
@@ -161,13 +161,18 @@ public class Worker : BackgroundService
         {
             foreach (var m in messages)
             {
-                await _mqttClient.PublishAsync(m, CancellationToken.None);
+                var result = await _mqttClient.PublishAsync(m, CancellationToken.None);
+                if (!result.IsSuccess)
+                {
+                    _logger.LogError("PublishError: " + result.ReasonString);
+                    await _mqttClient.ReconnectAsync();
+                }
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "PublishError");
-            await Init();
+            await _mqttClient.ReconnectAsync();
         }
     }
 
