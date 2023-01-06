@@ -16,8 +16,14 @@ public class EntityStates
     public string MachineIdentifier => this.machineId.Value;
 
     public string BootTime { get; set; }
-    
+
     public string IpAddress { get; set; }
-    
+
     public string CpuTemperature { get; set; }
+
+    public string CpuUse { get; set; }
+
+    public string CpuModel { get; set; }
+
+    public MemoryRam MemoryRam { get; set; }
 }
