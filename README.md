@@ -7,7 +7,7 @@ dotnet publish --use-current-runtime --sc --version-suffix 1.0.0.1 -o output/
 ```
 
 ```bash
-sudo mv output /opt/ha-machine-status
+sudo mv output/* /opt/ha-machine-status
 ```
 
 ## Run as a service
@@ -33,4 +33,6 @@ Run:
 
 ```
 sudo systemctl start ha-machine-status.service
+sudo systemctl status ha-machine-status.service
+sudo systemctl stop ha-machine-status.service
 ```
