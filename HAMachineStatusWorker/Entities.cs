@@ -5,7 +5,10 @@ using System.Globalization;
 using System.Linq;
 using System.Net.NetworkInformation;
 using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
+using HAMachineStatusWorker.Models;
 
 public static class Entities
 {
@@ -56,6 +59,51 @@ public static class Entities
         var result = coreTempSum / match.Count;
 
         return result.ToString("0.#", CultureInfo.InvariantCulture);
+    }
+
+    public static MemoryRam GetMemoryRam()
+    {
+        var shellResult = ExecuteShell("free --bytes");
+
+        const string pattern = @"Mem:\s+(?<total>[0-9]+)\s+(?<used>[0-9]+)";
+
+        var regex = new Regex(pattern);
+
+        var match = regex.Match(shellResult);
+
+        var total = long.Parse(match.Groups["total"].Value);
+        var used = long.Parse(match.Groups["used"].Value);
+
+        var memory = new MemoryRam(total, used);
+
+        return memory;
+    }
+
+    public static string GetCpuUse()
+    {
+        var shellResult = ExecuteShell("mpstat 1 1 -P ALL -o JSON");
+
+        var json = JsonSerializer.Deserialize<Root>(shellResult);
+
+        var dictionaryIdle = json.sysstat.hosts[0].statistics[0].cpuload.ToDictionary(x => x.cpu, x => x.idle);
+        var dictionaryUse = dictionaryIdle.ToDictionary(x => x.Key, x => 100 - x.Value);
+
+        return dictionaryUse["all"].ToString("0.##");
+    }
+
+    public static string GetCpuModel()
+    {
+        var shellResult = ExecuteShell($"lscpu");
+
+        const string pattern = @"Model name:\s*(?<model>[A-Za-z\(\)]+[ A-Za-z\(\)0-9\@\.]*)";
+
+        var regex = new Regex(pattern);
+
+        var match = regex.Match(shellResult);
+
+        var model = match.Groups["model"].Value;
+
+        return model;
     }
 
     private static string ExecuteShell(string command)
